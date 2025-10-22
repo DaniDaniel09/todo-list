@@ -69,6 +69,8 @@
                 </form>
 
                 <div class="d-flex flex-wrap gap-2 mb-3">
+                  <input id="txtFileInput" type="file" accept=".txt,.md,text/plain" class="d-none" />
+                  <button type="button" id="importTxtBtn" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-arrow-up me-1"></i> Importar TXT</button>
                   <button type="button" id="exportJsonBtn" class="btn btn-outline-secondary"><i class="bi bi-download me-1"></i> Exportar JSON</button>
                   <span class="ms-1 text-body-secondary">Guardado automático en este navegador</span>
                 </div>
@@ -138,6 +140,8 @@
     const pendingEmpty = document.getElementById('pendingEmpty');
     const completedEmpty = document.getElementById('completedEmpty');
     const exportJsonBtn = document.getElementById('exportJsonBtn');
+    const txtFileInput = document.getElementById('txtFileInput');
+    const importTxtBtn = document.getElementById('importTxtBtn');
 
     const editForm = document.getElementById('editForm');
     const editInput = document.getElementById('editInput');
@@ -167,7 +171,6 @@
       } catch {
         tasks = [];
       }
-    } catch { tasks = []; }
     }
 
     function save() {
@@ -366,6 +369,22 @@
     });
 
     // Importar/Exportar
+    importTxtBtn.addEventListener('click', () => txtFileInput.click());
+    txtFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const count = importFromTxtContent(text);
+        alert('Importadas ' + count + ' tareas desde TXT.');
+      } catch (err) {
+        alert('No se pudo importar el archivo TXT.');
+        console.error(err);
+      } finally {
+        e.target.value = '';
+      }
+    });
+
     exportJsonBtn.addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(getSnapshot(), null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
