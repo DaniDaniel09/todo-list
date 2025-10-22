@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lista de tareas · Bootstrap · 1 archivo</title>
+  <title>Lista de tareas · Bootstrap · Drag & Drop</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <!-- Bootstrap Icons (opcional) -->
@@ -18,7 +18,7 @@
     /* Checkbox con estilo */
     .task-checkbox.form-check-input {
       width: 1.25rem; height: 1.25rem; cursor: pointer;
-      margin-right: .75rem; border-radius: .35rem; /* esquinas suaves */
+      margin-right: .75rem; border-radius: .35rem;
       accent-color: var(--bs-primary);
     }
     .task-checkbox.form-check-input:focus { box-shadow: 0 0 0 .25rem rgba(13,110,253,.15); }
@@ -31,6 +31,14 @@
     .btn-icon { width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center; }
     .fade-enter { animation: fadeIn .2s ease-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Drag & Drop */
+    .drag-handle { cursor: grab; }
+    .dragging { opacity: .6; }
+    .drop-indicator {
+      height: 0; border-top: 2px dashed var(--bs-primary); margin: 0.25rem 0;
+    }
+    .drag-hover { background: rgba(13,110,253,.06); }
   </style>
 </head>
 <body>
@@ -72,17 +80,17 @@
                   <input id="txtFileInput" type="file" accept=".txt,.md,text/plain" class="d-none" />
                   <button type="button" id="importTxtBtn" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-arrow-up me-1"></i> Importar TXT</button>
                   <button type="button" id="exportJsonBtn" class="btn btn-outline-secondary"><i class="bi bi-download me-1"></i> Exportar JSON</button>
-                  <span class="ms-1 text-body-secondary">Guardado automático en este navegador</span>
+                  <span class="ms-1 text-body-secondary">Guardado automático en este navegador · arrastra para reordenar</span>
                 </div>
 
                 <!-- Lista pendientes -->
-                <ul id="pendingList" class="list-group list-group-flush"></ul>
+                <ul id="pendingList" class="list-group list-group-flush" aria-label="Lista de tareas pendientes"></ul>
                 <p id="pendingEmpty" class="empty-state text-center my-3 d-none">No hay tareas pendientes aún.</p>
               </div>
 
               <!-- TAB COMPLETADAS -->
               <div class="tab-pane fade" id="completadas" role="tabpanel" aria-labelledby="completadas-tab" tabindex="0">
-                <ul id="completedList" class="list-group list-group-flush"></ul>
+                <ul id="completedList" class="list-group list-group-flush" aria-label="Lista de tareas completadas"></ul>
                 <p id="completedEmpty" class="empty-state text-center my-3 d-none">Todavía no hay tareas completadas.</p>
               </div>
             </div>
@@ -123,14 +131,14 @@
 
   <script>
   (function() {
-    const DB_KEY = 'tareas_db_v2';
-    const LEGACY_KEY = 'tareas-bootstrap-v1';
+    const DB_KEY = 'tareas_db_v3_dragdrop'; // nueva versión para incluir órdenes
+    const LEGACY_KEYS = ['tareas_db_v2','tareas-bootstrap-v1'];
 
-    /** @type {{id:string,text:string,completed:boolean,createdAt:number,completedAt?:number}[]} */
+    /** @type {{id:string,text:string,completed:boolean,createdAt:number,completedAt?:number,orderPending?:number,orderCompleted?:number}[]} */
     let tasks = [];
     let editModal, editId = null;
 
-    function getSnapshot() { return { version: 2, updatedAt: Date.now(), tasks: tasks }; }
+    function getSnapshot() { return { version: 3, updatedAt: Date.now(), tasks: tasks }; }
 
     // Elementos
     const addForm = document.getElementById('addForm');
@@ -152,24 +160,49 @@
 
     function load() {
       try {
+        // v3
         const raw = localStorage.getItem(DB_KEY);
         if (raw) {
           const obj = JSON.parse(raw);
           tasks = Array.isArray(obj) ? obj : (obj && Array.isArray(obj.tasks) ? obj.tasks : []);
           if (!Array.isArray(tasks)) tasks = [];
+          normalizeOrders();
           return;
         }
-        // Migración desde formato legado (array plano)
-        const legacy = localStorage.getItem(LEGACY_KEY);
-        if (legacy) {
-          const arr = JSON.parse(legacy);
-          tasks = Array.isArray(arr) ? arr : [];
-          save();
-          return;
+        // migraciones
+        for (const key of LEGACY_KEYS) {
+          const legacy = localStorage.getItem(key);
+          if (legacy) {
+            let arr;
+            try {
+              const parsed = JSON.parse(legacy);
+              arr = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.tasks) ? parsed.tasks : []);
+            } catch {
+              arr = [];
+            }
+            tasks = Array.isArray(arr) ? arr : [];
+            normalizeOrders(true);
+            save(); // guarda ya en v3
+            return;
+          }
         }
         tasks = [];
       } catch {
         tasks = [];
+      }
+    }
+
+    function normalizeOrders(isMigrating = false) {
+      // Asegura orderPending / orderCompleted coherentes
+      const pend = tasks.filter(t => !t.completed);
+      const comp = tasks.filter(t => t.completed);
+      if (isMigrating || pend.some(t => typeof t.orderPending !== 'number')) {
+        pend.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+        pend.forEach((t, i) => t.orderPending = i);
+      }
+      if (isMigrating || comp.some(t => typeof t.orderCompleted !== 'number')) {
+        comp.sort((a,b) => (b.completedAt||b.createdAt||0) - (a.completedAt||a.createdAt||0));
+        comp.forEach((t, i) => t.orderCompleted = i);
       }
     }
 
@@ -183,24 +216,39 @@
       pendingList.innerHTML = '';
       completedList.innerHTML = '';
 
-      // ordenar: nuevas primero; completadas por fecha completada desc
-      const pend = tasks.filter(t => !t.completed).sort((a,b) => b.createdAt - a.createdAt);
-      const comp = tasks.filter(t => t.completed).sort((a,b) => (b.completedAt||0) - (a.completedAt||0));
+      // ordenar por orden manual; fallback timestamps si no existen
+      const pend = tasks
+        .filter(t => !t.completed)
+        .sort((a,b) => (a.orderPending ?? a.createdAt) - (b.orderPending ?? b.createdAt));
+      const comp = tasks
+        .filter(t => t.completed)
+        .sort((a,b) => (a.orderCompleted ?? a.completedAt ?? a.createdAt) - (b.orderCompleted ?? b.completedAt ?? b.createdAt));
 
-      pend.forEach(t => pendingList.appendChild(renderItem(t)));
-      comp.forEach(t => completedList.appendChild(renderItem(t)));
+      pend.forEach(t => pendingList.appendChild(renderItem(t, false)));
+      comp.forEach(t => completedList.appendChild(renderItem(t, true)));
 
       pendingEmpty.classList.toggle('d-none', pend.length !== 0);
       completedEmpty.classList.toggle('d-none', comp.length !== 0);
+
+      // activar DnD en ambas listas
+      enableListDnD(pendingList, false);
+      enableListDnD(completedList, true);
     }
 
-    function renderItem(task) {
+    function renderItem(task, isCompletedList) {
       const li = document.createElement('li');
       li.className = 'list-group-item fade-enter';
       li.dataset.id = task.id;
+      li.setAttribute('draggable', 'true'); // activar drag en el item
 
       const row = document.createElement('div');
       row.className = 'd-flex align-items-center gap-2';
+
+      // Asidero de arrastre
+      const dragBtn = document.createElement('button');
+      dragBtn.className = 'btn btn-outline-secondary btn-sm btn-icon drag-handle';
+      dragBtn.setAttribute('title', 'Arrastrar para reordenar');
+      dragBtn.innerHTML = '<i class="bi bi-grip-vertical"></i>';
 
       // Checkbox
       const cb = document.createElement('input');
@@ -237,10 +285,22 @@
 
       actions.appendChild(delBtn);
 
+      row.appendChild(dragBtn);
       row.appendChild(cb);
       row.appendChild(text);
       row.appendChild(actions);
       li.appendChild(row);
+
+      // Eventos drag para el propio item (delegados también a la lista)
+      li.addEventListener('dragstart', (e) => {
+        li.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', task.id);
+      });
+      li.addEventListener('dragend', () => {
+        li.classList.remove('dragging');
+        clearDropIndicators();
+      });
 
       return li;
     }
@@ -249,24 +309,33 @@
     function addTask(txt) {
       const text = txt.trim();
       if (!text) return;
-      const t = { id: uid(), text, completed: false, createdAt: Date.now() };
-      tasks.unshift(t);
+      const nextOrder = getNextOrderIndex(false); // al final de pendientes
+      const t = { id: uid(), text, completed: false, createdAt: Date.now(), orderPending: nextOrder };
+      tasks.push(t);
       save();
       render();
     }
 
     function addTasksBulk(texts) {
       const now = Date.now();
-      const toAdd = texts.map((txt, idx) => {
+      const base = getNextOrderIndex(false);
+      let count = 0;
+      texts.forEach((txt, idx) => {
         const t = (txt || '').trim();
-        if (!t) return null;
-        return { id: uid(), text: t, completed: false, createdAt: now + idx };
-      }).filter(Boolean);
-      if (toAdd.length === 0) return 0;
-      tasks = [...toAdd, ...tasks];
+        if (!t) return;
+        tasks.push({
+          id: uid(),
+          text: t,
+          completed: false,
+          createdAt: now + idx,
+          orderPending: base + count
+        });
+        count++;
+      });
+      if (count === 0) return 0;
       save();
       render();
-      return toAdd.length;
+      return count;
     }
 
     function importFromTxtContent(content) {
@@ -306,11 +375,14 @@
           text,
           completed,
           createdAt: (t && typeof t.createdAt === 'number') ? t.createdAt : (now + idx),
-          completedAt: completed ? ((t && typeof t.completedAt === 'number') ? t.completedAt : now + idx) : undefined
+          completedAt: completed ? ((t && typeof t.completedAt === 'number') ? t.completedAt : now + idx) : undefined,
+          orderPending: typeof t.orderPending === 'number' ? t.orderPending : undefined,
+          orderCompleted: typeof t.orderCompleted === 'number' ? t.orderCompleted : undefined
         };
       }).filter(Boolean);
       if (normalized.length === 0) return 0;
       tasks = options.replace ? normalized : [...normalized, ...tasks];
+      normalizeOrders();
       save();
       render();
       return normalized.length;
@@ -321,6 +393,13 @@
       if (!t) return;
       t.completed = !!completed;
       t.completedAt = completed ? Date.now() : undefined;
+      if (completed) {
+        // pasa a completadas -> colócalo al final (o al principio si prefieres)
+        t.orderCompleted = getNextOrderIndex(true);
+      } else {
+        // regresa a pendientes -> colócalo al final
+        t.orderPending = getNextOrderIndex(false);
+      }
       save();
       render();
     }
@@ -353,6 +432,98 @@
       render();
       editModal.hide();
       editId = null;
+    }
+
+    // ---- Drag & Drop helpers ----
+    function enableListDnD(listEl, isCompletedList) {
+      // listeners de la lista
+      listEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const afterEl = getDragAfterElement(listEl, e.clientY);
+        showDropIndicator(listEl, afterEl);
+      });
+
+      listEl.addEventListener('dragleave', () => {
+        listEl.classList.remove('drag-hover');
+        clearDropIndicators();
+      });
+
+      listEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const draggedId = e.dataTransfer.getData('text/plain');
+        const dragged = listEl.querySelector('[data-id="'+draggedId+'"]') || document.querySelector('[data-id="'+draggedId+'"]');
+
+        // Solo permitimos reordenar dentro de la misma lista (no cambiar estado por arrastre)
+        if (!dragged || dragged.parentElement !== listEl) {
+          clearDropIndicators();
+          return;
+        }
+
+        const afterEl = getDragAfterElement(listEl, e.clientY);
+        if (afterEl == null) {
+          listEl.appendChild(dragged);
+        } else {
+          listEl.insertBefore(dragged, afterEl);
+        }
+
+        listEl.classList.remove('drag-hover');
+        clearDropIndicators();
+        persistListOrder(listEl, isCompletedList);
+      });
+
+      // resaltado al entrar con item válido
+      listEl.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        listEl.classList.add('drag-hover');
+      });
+    }
+
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('li.list-group-item:not(.dragging)')];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    function showDropIndicator(listEl, afterEl) {
+      clearDropIndicators();
+      const indicator = document.createElement('div');
+      indicator.className = 'drop-indicator';
+      if (!afterEl) {
+        listEl.appendChild(indicator);
+      } else {
+        listEl.insertBefore(indicator, afterEl);
+      }
+    }
+
+    function clearDropIndicators() {
+      document.querySelectorAll('.drop-indicator').forEach(d => d.remove());
+    }
+
+    function persistListOrder(listEl, isCompletedList) {
+      const ids = [...listEl.querySelectorAll('li.list-group-item')].map(li => li.dataset.id);
+      ids.forEach((id, idx) => {
+        const t = tasks.find(x => x.id === id);
+        if (!t) return;
+        if (isCompletedList) t.orderCompleted = idx;
+        else t.orderPending = idx;
+      });
+      save();
+      // No re-render inmediato para evitar "salto"; el DOM ya refleja el nuevo orden
+    }
+
+    function getNextOrderIndex(isCompletedList) {
+      const arr = tasks.filter(t => !!t.completed === !!isCompletedList);
+      if (arr.length === 0) return 0;
+      const key = isCompletedList ? 'orderCompleted' : 'orderPending';
+      const max = arr.reduce((m,t) => Math.max(m, typeof t[key] === 'number' ? t[key] : -1), -1);
+      return max + 1;
     }
 
     // Eventos
