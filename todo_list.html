@@ -68,6 +68,11 @@
                   </div>
                 </form>
 
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                  <button type="button" id="exportJsonBtn" class="btn btn-outline-secondary"><i class="bi bi-download me-1"></i> Exportar JSON</button>
+                  <span class="ms-1 text-body-secondary">Guardado automático en este navegador</span>
+                </div>
+
                 <!-- Lista pendientes -->
                 <ul id="pendingList" class="list-group list-group-flush"></ul>
                 <p id="pendingEmpty" class="empty-state text-center my-3 d-none">No hay tareas pendientes aún.</p>
@@ -116,11 +121,14 @@
 
   <script>
   (function() {
-    const STORAGE_KEY = 'tareas-bootstrap-v1';
+    const DB_KEY = 'tareas_db_v2';
+    const LEGACY_KEY = 'tareas-bootstrap-v1';
 
     /** @type {{id:string,text:string,completed:boolean,createdAt:number,completedAt?:number}[]} */
     let tasks = [];
     let editModal, editId = null;
+
+    function getSnapshot() { return { version: 2, updatedAt: Date.now(), tasks: tasks }; }
 
     // Elementos
     const addForm = document.getElementById('addForm');
@@ -129,6 +137,7 @@
     const completedList = document.getElementById('completedList');
     const pendingEmpty = document.getElementById('pendingEmpty');
     const completedEmpty = document.getElementById('completedEmpty');
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
 
     const editForm = document.getElementById('editForm');
     const editInput = document.getElementById('editInput');
@@ -139,14 +148,31 @@
 
     function load() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        tasks = raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(tasks)) tasks = [];
-      } catch { tasks = []; }
+        const raw = localStorage.getItem(DB_KEY);
+        if (raw) {
+          const obj = JSON.parse(raw);
+          tasks = Array.isArray(obj) ? obj : (obj && Array.isArray(obj.tasks) ? obj.tasks : []);
+          if (!Array.isArray(tasks)) tasks = [];
+          return;
+        }
+        // Migración desde formato legado (array plano)
+        const legacy = localStorage.getItem(LEGACY_KEY);
+        if (legacy) {
+          const arr = JSON.parse(legacy);
+          tasks = Array.isArray(arr) ? arr : [];
+          save();
+          return;
+        }
+        tasks = [];
+      } catch {
+        tasks = [];
+      }
+    } catch { tasks = []; }
     }
 
     function save() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      const payload = getSnapshot();
+      localStorage.setItem(DB_KEY, JSON.stringify(payload));
     }
 
     function render() {
@@ -226,6 +252,67 @@
       render();
     }
 
+    function addTasksBulk(texts) {
+      const now = Date.now();
+      const toAdd = texts.map((txt, idx) => {
+        const t = (txt || '').trim();
+        if (!t) return null;
+        return { id: uid(), text: t, completed: false, createdAt: now + idx };
+      }).filter(Boolean);
+      if (toAdd.length === 0) return 0;
+      tasks = [...toAdd, ...tasks];
+      save();
+      render();
+      return toAdd.length;
+    }
+
+    function importFromTxtContent(content) {
+      const lines = (content || '').split(/\r?\n/);
+      const texts = [];
+      for (const raw of lines) {
+        const line = (raw || '').trim();
+        if (!line) continue;
+        const bullet = line.replace(/^[*-]\s*/, '');
+        const m = bullet.match(/^(.*?)\s*->\s*(.+)$/);
+        let text;
+        if (m) {
+          const code = m[1].trim();
+          const desc = m[2].trim();
+          text = (code ? '[' + code + '] ' : '') + desc;
+        } else {
+          text = bullet; // línea sin "->"
+        }
+        texts.push(text);
+      }
+      return addTasksBulk(texts);
+    }
+
+    function importFromJsonContent(content, opts) {
+      const options = Object.assign({ replace: true }, opts || {});
+      let data;
+      try { data = JSON.parse(content); } catch (e) { throw new Error('JSON inválido'); }
+      let arr = Array.isArray(data) ? data : (data && Array.isArray(data.tasks) ? data.tasks : null);
+      if (!arr) throw new Error('Formato no válido: usa un array de tareas o { "tasks": [...] }');
+      const now = Date.now();
+      const normalized = arr.map((t, idx) => {
+        const text = (t && (t.text ?? t.title ?? '')).toString().trim();
+        if (!text) return null;
+        const completed = !!t.completed;
+        return {
+          id: (t && typeof t.id === 'string' && t.id) ? t.id : uid(),
+          text,
+          completed,
+          createdAt: (t && typeof t.createdAt === 'number') ? t.createdAt : (now + idx),
+          completedAt: completed ? ((t && typeof t.completedAt === 'number') ? t.completedAt : now + idx) : undefined
+        };
+      }).filter(Boolean);
+      if (normalized.length === 0) return 0;
+      tasks = options.replace ? normalized : [...normalized, ...tasks];
+      save();
+      render();
+      return normalized.length;
+    }
+
     function toggleCompleted(id, completed) {
       const t = tasks.find(x => x.id === id);
       if (!t) return;
@@ -276,6 +363,18 @@
     editForm.addEventListener('submit', (e) => {
       e.preventDefault();
       applyEdit();
+    });
+
+    // Importar/Exportar
+    exportJsonBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(getSnapshot(), null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'tareas.json';
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      a.remove();
     });
 
     // Cargar y pintar
