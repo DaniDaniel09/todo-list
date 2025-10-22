@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="es" data-bs-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lista de tareas · Bootstrap · 1 archivo</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <!-- Bootstrap Icons (opcional) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    /* Ajustes visuales */
+    body { background: #f8f9fa; }
+    .card { border: none; box-shadow: 0 8px 22px rgba(0,0,0,.06); }
+    .list-group-item { border: 0; border-bottom: 1px solid rgba(0,0,0,.06); }
+    .list-group-item:last-child { border-bottom: 0; }
+
+    /* Checkbox con estilo */
+    .task-checkbox.form-check-input {
+      width: 1.25rem; height: 1.25rem; cursor: pointer;
+      margin-right: .75rem; border-radius: .35rem; /* esquinas suaves */
+      accent-color: var(--bs-primary);
+    }
+    .task-checkbox.form-check-input:focus { box-shadow: 0 0 0 .25rem rgba(13,110,253,.15); }
+
+    /* Texto de tarea */
+    .task-text { flex: 1; }
+    .task-text.completed { text-decoration: line-through; color: var(--bs-secondary-color); }
+
+    .empty-state { color: var(--bs-secondary-color); }
+    .btn-icon { width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center; }
+    .fade-enter { animation: fadeIn .2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-10 col-lg-8">
+        <div class="card rounded-4">
+          <div class="card-body p-4">
+            <div class="d-flex align-items-center mb-3">
+              <i class="bi bi-check2-square fs-3 text-primary me-2"></i>
+              <h1 class="h3 m-0">Lista de tareas</h1>
+            </div>
+
+            <!-- Tabs -->
+            <ul class="nav nav-tabs" id="todoTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="pendientes-tab" data-bs-toggle="tab" data-bs-target="#pendientes" type="button" role="tab" aria-controls="pendientes" aria-selected="true">Por completar</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="completadas-tab" data-bs-toggle="tab" data-bs-target="#completadas" type="button" role="tab" aria-controls="completadas" aria-selected="false">Completadas</button>
+              </li>
+            </ul>
+
+            <div class="tab-content pt-3" id="todoTabsContent">
+              <!-- TAB PENDIENTES -->
+              <div class="tab-pane fade show active" id="pendientes" role="tabpanel" aria-labelledby="pendientes-tab" tabindex="0">
+                <!-- Form añadir -->
+                <form id="addForm" class="row g-2 align-items-center mb-3" autocomplete="off">
+                  <div class="col-12 col-md">
+                    <label for="newTaskInput" class="visually-hidden">Nueva tarea</label>
+                    <input id="newTaskInput" class="form-control form-control-lg" type="text" placeholder="Escribe una nueva tarea y pulsa Enter…" maxlength="200" />
+                  </div>
+                  <div class="col-12 col-md-auto">
+                    <button class="btn btn-primary btn-lg w-100" type="submit"><i class="bi bi-plus-lg me-1"></i> Añadir</button>
+                  </div>
+                </form>
+
+                <!-- Lista pendientes -->
+                <ul id="pendingList" class="list-group list-group-flush"></ul>
+                <p id="pendingEmpty" class="empty-state text-center my-3 d-none">No hay tareas pendientes aún.</p>
+              </div>
+
+              <!-- TAB COMPLETADAS -->
+              <div class="tab-pane fade" id="completadas" role="tabpanel" aria-labelledby="completadas-tab" tabindex="0">
+                <ul id="completedList" class="list-group list-group-flush"></ul>
+                <p id="completedEmpty" class="empty-state text-center my-3 d-none">Todavía no hay tareas completadas.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Editar -->
+        <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">Editar tarea</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+              </div>
+              <form id="editForm">
+                <div class="modal-body">
+                  <div class="mb-3">
+                    <label for="editInput" class="form-label">Texto</label>
+                    <input type="text" id="editInput" class="form-control" maxlength="200" required />
+                    <div class="form-text">Solo puedes editar tareas en "Por completar".</div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                  <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap Bundle (incluye Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+  <script>
+  (function() {
+    const STORAGE_KEY = 'tareas-bootstrap-v1';
+
+    /** @type {{id:string,text:string,completed:boolean,createdAt:number,completedAt?:number}[]} */
+    let tasks = [];
+    let editModal, editId = null;
+
+    // Elementos
+    const addForm = document.getElementById('addForm');
+    const newTaskInput = document.getElementById('newTaskInput');
+    const pendingList = document.getElementById('pendingList');
+    const completedList = document.getElementById('completedList');
+    const pendingEmpty = document.getElementById('pendingEmpty');
+    const completedEmpty = document.getElementById('completedEmpty');
+
+    const editForm = document.getElementById('editForm');
+    const editInput = document.getElementById('editInput');
+    editModal = new bootstrap.Modal('#editModal');
+
+    // Utilidades
+    const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        tasks = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(tasks)) tasks = [];
+      } catch { tasks = []; }
+    }
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    }
+
+    function render() {
+      // limpiar
+      pendingList.innerHTML = '';
+      completedList.innerHTML = '';
+
+      // ordenar: nuevas primero; completadas por fecha completada desc
+      const pend = tasks.filter(t => !t.completed).sort((a,b) => b.createdAt - a.createdAt);
+      const comp = tasks.filter(t => t.completed).sort((a,b) => (b.completedAt||0) - (a.completedAt||0));
+
+      pend.forEach(t => pendingList.appendChild(renderItem(t)));
+      comp.forEach(t => completedList.appendChild(renderItem(t)));
+
+      pendingEmpty.classList.toggle('d-none', pend.length !== 0);
+      completedEmpty.classList.toggle('d-none', comp.length !== 0);
+    }
+
+    function renderItem(task) {
+      const li = document.createElement('li');
+      li.className = 'list-group-item fade-enter';
+      li.dataset.id = task.id;
+
+      const row = document.createElement('div');
+      row.className = 'd-flex align-items-center gap-2';
+
+      // Checkbox
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'form-check-input task-checkbox mt-0';
+      cb.checked = !!task.completed;
+      cb.setAttribute('aria-label', task.completed ? 'Desmarcar tarea' : 'Marcar tarea');
+      cb.addEventListener('change', () => toggleCompleted(task.id, cb.checked));
+
+      // Texto
+      const text = document.createElement('span');
+      text.className = 'task-text';
+      text.textContent = task.text; // evita HTML injection
+      if (task.completed) text.classList.add('completed');
+
+      // Acciones
+      const actions = document.createElement('div');
+      actions.className = 'ms-auto d-flex gap-1';
+
+      if (!task.completed) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-outline-secondary btn-sm btn-icon';
+        editBtn.setAttribute('title', 'Editar');
+        editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+        editBtn.addEventListener('click', () => openEdit(task.id));
+        actions.appendChild(editBtn);
+      }
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-outline-danger btn-sm btn-icon';
+      delBtn.setAttribute('title', 'Eliminar');
+      delBtn.innerHTML = '<i class="bi bi-trash"></i>';
+      delBtn.addEventListener('click', () => removeTask(task.id));
+
+      actions.appendChild(delBtn);
+
+      row.appendChild(cb);
+      row.appendChild(text);
+      row.appendChild(actions);
+      li.appendChild(row);
+
+      return li;
+    }
+
+    // Acciones
+    function addTask(txt) {
+      const text = txt.trim();
+      if (!text) return;
+      const t = { id: uid(), text, completed: false, createdAt: Date.now() };
+      tasks.unshift(t);
+      save();
+      render();
+    }
+
+    function toggleCompleted(id, completed) {
+      const t = tasks.find(x => x.id === id);
+      if (!t) return;
+      t.completed = !!completed;
+      t.completedAt = completed ? Date.now() : undefined;
+      save();
+      render();
+    }
+
+    function removeTask(id) {
+      const t = tasks.find(x => x.id === id);
+      if (!t) return;
+      if (!confirm('¿Eliminar la tarea?')) return;
+      tasks = tasks.filter(x => x.id !== id);
+      save();
+      render();
+    }
+
+    function openEdit(id) {
+      const t = tasks.find(x => x.id === id);
+      if (!t || t.completed) return; // solo en pendientes
+      editId = id;
+      editInput.value = t.text;
+      setTimeout(() => { editInput.focus(); editInput.select(); }, 75);
+      editModal.show();
+    }
+
+    function applyEdit() {
+      const t = tasks.find(x => x.id === editId);
+      if (!t) return;
+      const val = editInput.value.trim();
+      if (!val) return; // evita vacío
+      t.text = val;
+      save();
+      render();
+      editModal.hide();
+      editId = null;
+    }
+
+    // Eventos
+    addForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      addTask(newTaskInput.value);
+      newTaskInput.value = '';
+      newTaskInput.focus();
+    });
+
+    editForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      applyEdit();
+    });
+
+    // Cargar y pintar
+    load();
+    render();
+  })();
+  </script>
+</body>
+</html>
