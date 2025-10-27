@@ -1,18 +1,39 @@
 <!doctype html>
-<html lang="es" data-bs-theme="light">
+<html lang="es" data-bs-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Lista de tareas · Bootstrap · Drag & Drop</title>
+
+  <!-- Evitar "flash" de tema: se aplica antes del render -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('todo_theme');
+        var theme = (saved === 'light' || saved === 'dark') ? saved : 'dark';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-bs-theme', 'dark');
+      }
+    })();
+  </script>
+
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-  <!-- Bootstrap Icons (opcional) -->
+  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
   <style>
-    /* Ajustes visuales */
-    body { background: #f8f9fa; }
-    .card { border: none; box-shadow: 0 8px 22px rgba(0,0,0,.06); }
+    /* Ajustes visuales (sensibles a tema) */
+    :root {
+      --shadow-soft: 0 8px 22px rgba(0,0,0,.16);
+    }
+    [data-bs-theme="light"] :root { --shadow-soft: 0 8px 22px rgba(0,0,0,.06); }
+
+    body { background: var(--bs-body-bg); color: var(--bs-body-color); }
+    .card { border: none; box-shadow: var(--shadow-soft); }
     .list-group-item { border: 0; border-bottom: 1px solid rgba(0,0,0,.06); }
+    [data-bs-theme="dark"] .list-group-item { border-bottom-color: rgba(255,255,255,.06); }
     .list-group-item:last-child { border-bottom: 0; }
 
     /* Checkbox con estilo */
@@ -21,7 +42,7 @@
       margin-right: .75rem; border-radius: .35rem;
       accent-color: var(--bs-primary);
     }
-    .task-checkbox.form-check-input:focus { box-shadow: 0 0 0 .25rem rgba(13,110,253,.15); }
+    .task-checkbox.form-check-input:focus { box-shadow: 0 0 0 .25rem rgba(13,110,253,.25); }
 
     /* Texto de tarea */
     .task-text { flex: 1; }
@@ -39,6 +60,31 @@
       height: 0; border-top: 2px dashed var(--bs-primary); margin: 0.25rem 0;
     }
     .drag-hover { background: rgba(13,110,253,.06); }
+    [data-bs-theme="dark"] .drag-hover { background: rgba(13,110,253,.15); }
+
+    /* Galería de imágenes por tarea */
+    .task-gallery {
+      display: flex; flex-wrap: wrap; gap: .5rem; margin-left: 3.5rem; /* alinea con checkbox/drag */
+      margin-top: .5rem;
+    }
+    .thumb {
+      position: relative; width: 84px; height: 84px; border-radius: .5rem; overflow: hidden;
+      border: 1px solid rgba(0,0,0,.05);
+    }
+    [data-bs-theme="dark"] .thumb { border-color: rgba(255,255,255,.08); }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb .thumb-actions {
+      position: absolute; inset: auto .25rem .25rem .25rem; display: flex; gap: .25rem; justify-content: center;
+    }
+    .thumb .btn-thumb {
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(0,0,0,.2);
+    }
+    [data-bs-theme="dark"] .thumb .btn-thumb { border-color: rgba(255,255,255,.2); }
+    .add-image-btn { margin-left: auto; }
+
+    /* Botón tema en el header */
+    .theme-toggle .bi { vertical-align: -0.125em; }
   </style>
 </head>
 <body>
@@ -50,6 +96,11 @@
             <div class="d-flex align-items-center mb-3">
               <i class="bi bi-check2-square fs-3 text-primary me-2"></i>
               <h1 class="h3 m-0">Lista de tareas</h1>
+              <div class="ms-auto">
+                <button id="themeToggleBtn" type="button" class="btn btn-outline-secondary btn-sm theme-toggle" aria-label="Cambiar tema">
+                  <i class="bi bi-moon-stars" id="themeIcon"></i>
+                </button>
+              </div>
             </div>
 
             <!-- Tabs -->
@@ -122,6 +173,25 @@
           </div>
         </div>
 
+        <!-- Modal Imagen (vista previa / borrar) -->
+        <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Imagen de la tarea</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+              </div>
+              <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Vista previa" class="img-fluid rounded" />
+              </div>
+              <div class="modal-footer">
+                <button id="deleteImageBtn" type="button" class="btn btn-outline-danger"><i class="bi bi-trash me-1"></i>Eliminar imagen</button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -131,14 +201,19 @@
 
   <script>
   (function() {
-    const DB_KEY = 'tareas_db_v3_dragdrop'; // nueva versión para incluir órdenes
-    const LEGACY_KEYS = ['tareas_db_v2','tareas-bootstrap-v1'];
+    const DB_KEY = 'tareas_db_v3_dragdrop_images'; // nueva versión con imágenes
+    const LEGACY_KEYS = ['tareas_db_v3_dragdrop','tareas_db_v2','tareas-bootstrap-v1'];
 
-    /** @type {{id:string,text:string,completed:boolean,createdAt:number,completedAt?:number,orderPending?:number,orderCompleted?:number}[]} */
+    /** @type {{
+      id:string,text:string,completed:boolean,createdAt:number,completedAt?:number,
+      orderPending?:number,orderCompleted?:number,
+      images?: {id:string,name?:string,dataUrl:string,createdAt:number}[]
+    }[]} */
     let tasks = [];
     let editModal, editId = null;
+    let imageModal, imageModalState = { taskId: null, imageId: null };
 
-    function getSnapshot() { return { version: 3, updatedAt: Date.now(), tasks: tasks }; }
+    function getSnapshot() { return { version: 4, updatedAt: Date.now(), tasks: tasks }; }
 
     // Elementos
     const addForm = document.getElementById('addForm');
@@ -155,12 +230,20 @@
     const editInput = document.getElementById('editInput');
     editModal = new bootstrap.Modal('#editModal');
 
+    const imageModalEl = document.getElementById('imageModal');
+    imageModal = new bootstrap.Modal(imageModalEl);
+    const modalImage = document.getElementById('modalImage');
+    const deleteImageBtn = document.getElementById('deleteImageBtn');
+
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeIcon = document.getElementById('themeIcon');
+
     // Utilidades
     const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     function load() {
       try {
-        // v3
+        // v4
         const raw = localStorage.getItem(DB_KEY);
         if (raw) {
           const obj = JSON.parse(raw);
@@ -177,12 +260,12 @@
             try {
               const parsed = JSON.parse(legacy);
               arr = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.tasks) ? parsed.tasks : []);
-            } catch {
-              arr = [];
-            }
+            } catch { arr = []; }
             tasks = Array.isArray(arr) ? arr : [];
+            // asegurar propiedad images
+            tasks.forEach(t => { if (!Array.isArray(t.images)) t.images = []; });
             normalizeOrders(true);
-            save(); // guarda ya en v3
+            save(); // guarda ya en v4
             return;
           }
         }
@@ -212,11 +295,9 @@
     }
 
     function render() {
-      // limpiar
       pendingList.innerHTML = '';
       completedList.innerHTML = '';
 
-      // ordenar por orden manual; fallback timestamps si no existen
       const pend = tasks
         .filter(t => !t.completed)
         .sort((a,b) => (a.orderPending ?? a.createdAt) - (b.orderPending ?? b.createdAt));
@@ -233,13 +314,16 @@
       // activar DnD en ambas listas
       enableListDnD(pendingList, false);
       enableListDnD(completedList, true);
+
+      // actualizar icono de tema
+      updateThemeIcon();
     }
 
     function renderItem(task, isCompletedList) {
       const li = document.createElement('li');
       li.className = 'list-group-item fade-enter';
       li.dataset.id = task.id;
-      li.setAttribute('draggable', 'true'); // activar drag en el item
+      li.setAttribute('draggable', 'true');
 
       const row = document.createElement('div');
       row.className = 'd-flex align-items-center gap-2';
@@ -261,12 +345,37 @@
       // Texto
       const text = document.createElement('span');
       text.className = 'task-text';
-      text.textContent = task.text; // evita HTML injection
+      text.textContent = task.text;
       if (task.completed) text.classList.add('completed');
 
       // Acciones
       const actions = document.createElement('div');
       actions.className = 'ms-auto d-flex gap-1';
+
+      // Botón añadir imagen (disponible tanto en pendientes como completadas)
+      const addImgBtn = document.createElement('button');
+      addImgBtn.type = 'button';
+      addImgBtn.className = 'btn btn-outline-secondary btn-sm btn-icon add-image-btn';
+      addImgBtn.setAttribute('title', 'Añadir imagen');
+      addImgBtn.innerHTML = '<i class="bi bi-image"></i>';
+      const inputFile = document.createElement('input');
+      inputFile.type = 'file';
+      inputFile.accept = 'image/*';
+      inputFile.multiple = true;
+      inputFile.className = 'd-none';
+      addImgBtn.addEventListener('click', () => inputFile.click());
+      inputFile.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        try {
+          await addImagesToTask(task.id, files);
+        } catch (err) {
+          console.error(err);
+          alert('No se pudieron añadir algunas imágenes.');
+        } finally {
+          e.target.value = '';
+        }
+      });
 
       if (!task.completed) {
         const editBtn = document.createElement('button');
@@ -283,6 +392,8 @@
       delBtn.innerHTML = '<i class="bi bi-trash"></i>';
       delBtn.addEventListener('click', () => removeTask(task.id));
 
+      actions.appendChild(addImgBtn);
+      actions.appendChild(inputFile);
       actions.appendChild(delBtn);
 
       row.appendChild(dragBtn);
@@ -291,7 +402,14 @@
       row.appendChild(actions);
       li.appendChild(row);
 
-      // Eventos drag para el propio item (delegados también a la lista)
+      // Galería
+      const gallery = document.createElement('div');
+      gallery.className = 'task-gallery';
+      const imgs = Array.isArray(task.images) ? task.images : [];
+      imgs.forEach(img => gallery.appendChild(renderThumb(task.id, img)));
+      li.appendChild(gallery);
+
+      // Eventos drag para el propio item
       li.addEventListener('dragstart', (e) => {
         li.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
@@ -305,12 +423,52 @@
       return li;
     }
 
+    function renderThumb(taskId, imgObj) {
+      const wrap = document.createElement('div');
+      wrap.className = 'thumb';
+      wrap.dataset.imageId = imgObj.id;
+
+      const img = document.createElement('img');
+      img.src = imgObj.dataUrl;
+      img.alt = imgObj.name || 'Imagen';
+      img.loading = 'lazy';
+      img.style.cursor = 'pointer';
+      img.addEventListener('click', () => openImageModal(taskId, imgObj.id));
+
+      const actions = document.createElement('div');
+      actions.className = 'thumb-actions';
+
+      const viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'btn btn-light btn-sm btn-thumb';
+      viewBtn.setAttribute('title', 'Ver');
+      viewBtn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
+      viewBtn.addEventListener('click', () => openImageModal(taskId, imgObj.id));
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-outline-danger btn-sm btn-thumb';
+      removeBtn.setAttribute('title', 'Eliminar imagen');
+      removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
+      removeBtn.addEventListener('click', () => {
+        if (confirm('¿Eliminar esta imagen?')) {
+          removeImageFromTask(taskId, imgObj.id);
+        }
+      });
+
+      actions.appendChild(viewBtn);
+      actions.appendChild(removeBtn);
+      wrap.appendChild(img);
+      wrap.appendChild(actions);
+      return wrap;
+    }
+
     // Acciones
     function addTask(txt) {
       const text = txt.trim();
       if (!text) return;
-      const nextOrder = getNextOrderIndex(false); // al final de pendientes
-      const t = { id: uid(), text, completed: false, createdAt: Date.now(), orderPending: nextOrder };
+      const nextOrder = getNextOrderIndex(false);
+      const t = { id: uid(), text, completed: false, createdAt: Date.now(), orderPending: nextOrder, images: [] };
       tasks.push(t);
       save();
       render();
@@ -328,7 +486,8 @@
           text: t,
           completed: false,
           createdAt: now + idx,
-          orderPending: base + count
+          orderPending: base + count,
+          images: []
         });
         count++;
       });
@@ -352,7 +511,7 @@
           const desc = m[2].trim();
           text = (code ? '[' + code + '] ' : '') + desc;
         } else {
-          text = bullet; // línea sin "->"
+          text = bullet;
         }
         texts.push(text);
       }
@@ -370,6 +529,12 @@
         const text = (t && (t.text ?? t.title ?? '')).toString().trim();
         if (!text) return null;
         const completed = !!t.completed;
+        const images = Array.isArray(t.images) ? t.images.filter(it => it && typeof it.dataUrl === 'string').map(it => ({
+          id: typeof it.id === 'string' && it.id ? it.id : uid(),
+          name: (it.name || '').toString().slice(0,120),
+          dataUrl: it.dataUrl,
+          createdAt: typeof it.createdAt === 'number' ? it.createdAt : now
+        })) : [];
         return {
           id: (t && typeof t.id === 'string' && t.id) ? t.id : uid(),
           text,
@@ -377,7 +542,8 @@
           createdAt: (t && typeof t.createdAt === 'number') ? t.createdAt : (now + idx),
           completedAt: completed ? ((t && typeof t.completedAt === 'number') ? t.completedAt : now + idx) : undefined,
           orderPending: typeof t.orderPending === 'number' ? t.orderPending : undefined,
-          orderCompleted: typeof t.orderCompleted === 'number' ? t.orderCompleted : undefined
+          orderCompleted: typeof t.orderCompleted === 'number'] === 'number' ? t.orderCompleted : undefined,
+          images
         };
       }).filter(Boolean);
       if (normalized.length === 0) return 0;
@@ -394,10 +560,8 @@
       t.completed = !!completed;
       t.completedAt = completed ? Date.now() : undefined;
       if (completed) {
-        // pasa a completadas -> colócalo al final (o al principio si prefieres)
         t.orderCompleted = getNextOrderIndex(true);
       } else {
-        // regresa a pendientes -> colócalo al final
         t.orderPending = getNextOrderIndex(false);
       }
       save();
@@ -426,7 +590,7 @@
       const t = tasks.find(x => x.id === editId);
       if (!t) return;
       const val = editInput.value.trim();
-      if (!val) return; // evita vacío
+      if (!val) return;
       t.text = val;
       save();
       render();
@@ -434,9 +598,94 @@
       editId = null;
     }
 
+    // ---- Imágenes ----
+    async function addImagesToTask(taskId, files) {
+      const t = tasks.find(x => x.id === taskId);
+      if (!t) return;
+      if (!Array.isArray(t.images)) t.images = [];
+      // Procesar cada archivo
+      const procs = files.map(async (file) => {
+        if (!file.type.startsWith('image/')) return null;
+        const dataUrl = await fileToCompressedDataURL(file, 1280, 0.8);
+        return {
+          id: uid(),
+          name: file.name,
+          dataUrl,
+          createdAt: Date.now()
+        };
+      });
+      const results = await Promise.all(procs);
+      let added = 0;
+      results.forEach(img => { if (img) { t.images.push(img); added++; } });
+      if (added > 0) {
+        save();
+        render();
+      }
+    }
+
+    function removeImageFromTask(taskId, imageId) {
+      const t = tasks.find(x => x.id === taskId);
+      if (!t || !Array.isArray(t.images)) return;
+      t.images = t.images.filter(im => im.id !== imageId);
+      save();
+      render();
+      // si estaba abierto el modal de esa imagen, cerrarlo
+      if (imageModalState.taskId === taskId && imageModalState.imageId === imageId) {
+        imageModal.hide();
+        imageModalState = { taskId: null, imageId: null };
+      }
+    }
+
+    function openImageModal(taskId, imageId) {
+      const t = tasks.find(x => x.id === taskId);
+      if (!t || !Array.isArray(t.images)) return;
+      const im = t.images.find(x => x.id === imageId);
+      if (!im) return;
+      document.getElementById('imageModalLabel').textContent = im.name || 'Imagen';
+      document.getElementById('modalImage').src = im.dataUrl;
+      imageModalState = { taskId, imageId };
+      imageModal.show();
+    }
+
+    deleteImageBtn.addEventListener('click', () => {
+      if (!imageModalState.taskId || !imageModalState.imageId) return;
+      if (confirm('¿Eliminar esta imagen?')) {
+        removeImageFromTask(imageModalState.taskId, imageModalState.imageId);
+      }
+    });
+
+    // Lector + compresor
+    function fileToCompressedDataURL(file, maxSize = 1280, quality = 0.8) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const { width, height } = scaleToFit(img.width, img.height, maxSize, maxSize);
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            // convertimos a JPEG para reducir tamaño (conservar alpha en PNG si quieres: usa 'image/png')
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(dataUrl);
+          };
+          img.onerror = () => reject(new Error('Imagen inválida'));
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function scaleToFit(w, h, maxW, maxH) {
+      const ratio = Math.min(maxW / w, maxH / h, 1);
+      return { width: Math.round(w * ratio), height: Math.round(h * ratio) };
+    }
+
     // ---- Drag & Drop helpers ----
     function enableListDnD(listEl, isCompletedList) {
-      // listeners de la lista
       listEl.addEventListener('dragover', (e) => {
         e.preventDefault();
         const afterEl = getDragAfterElement(listEl, e.clientY);
@@ -453,7 +702,7 @@
         const draggedId = e.dataTransfer.getData('text/plain');
         const dragged = listEl.querySelector('[data-id="'+draggedId+'"]') || document.querySelector('[data-id="'+draggedId+'"]');
 
-        // Solo permitimos reordenar dentro de la misma lista (no cambiar estado por arrastre)
+        // Solo reordenar dentro de la misma lista
         if (!dragged || dragged.parentElement !== listEl) {
           clearDropIndicators();
           return;
@@ -471,7 +720,6 @@
         persistListOrder(listEl, isCompletedList);
       });
 
-      // resaltado al entrar con item válido
       listEl.addEventListener('dragenter', (e) => {
         e.preventDefault();
         listEl.classList.add('drag-hover');
@@ -515,7 +763,6 @@
         else t.orderPending = idx;
       });
       save();
-      // No re-render inmediato para evitar "salto"; el DOM ya refleja el nuevo orden
     }
 
     function getNextOrderIndex(isCompletedList) {
@@ -525,6 +772,23 @@
       const max = arr.reduce((m,t) => Math.max(m, typeof t[key] === 'number' ? t[key] : -1), -1);
       return max + 1;
     }
+
+    // ---- Tema ----
+    function updateThemeIcon() {
+      const theme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+      themeIcon.className = theme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+      themeToggleBtn.setAttribute('aria-label', theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-bs-theme', next);
+      try { localStorage.setItem('todo_theme', next); } catch(e) {}
+      updateThemeIcon();
+    }
+
+    themeToggleBtn.addEventListener('click', toggleTheme);
 
     // Eventos
     addForm.addEventListener('submit', (e) => {
