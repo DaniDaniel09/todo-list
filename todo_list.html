@@ -25,9 +25,7 @@
 
   <style>
     /* Ajustes visuales (sensibles a tema) */
-    :root {
-      --shadow-soft: 0 8px 22px rgba(0,0,0,.16);
-    }
+    :root { --shadow-soft: 0 8px 22px rgba(0,0,0,.16); }
     [data-bs-theme="light"] :root { --shadow-soft: 0 8px 22px rgba(0,0,0,.06); }
 
     body { background: var(--bs-body-bg); color: var(--bs-body-color); }
@@ -56,30 +54,17 @@
     /* Drag & Drop */
     .drag-handle { cursor: grab; }
     .dragging { opacity: .6; }
-    .drop-indicator {
-      height: 0; border-top: 2px dashed var(--bs-primary); margin: 0.25rem 0;
-    }
+    .drop-indicator { height: 0; border-top: 2px dashed var(--bs-primary); margin: 0.25rem 0; }
     .drag-hover { background: rgba(13,110,253,.06); }
     [data-bs-theme="dark"] .drag-hover { background: rgba(13,110,253,.15); }
 
     /* Galería de imágenes por tarea */
-    .task-gallery {
-      display: flex; flex-wrap: wrap; gap: .5rem; margin-left: 3.5rem; /* alinea con checkbox/drag */
-      margin-top: .5rem;
-    }
-    .thumb {
-      position: relative; width: 84px; height: 84px; border-radius: .5rem; overflow: hidden;
-      border: 1px solid rgba(0,0,0,.05);
-    }
+    .task-gallery { display: flex; flex-wrap: wrap; gap: .5rem; margin-left: 3.5rem; margin-top: .5rem; }
+    .thumb { position: relative; width: 84px; height: 84px; border-radius: .5rem; overflow: hidden; border: 1px solid rgba(0,0,0,.05); }
     [data-bs-theme="dark"] .thumb { border-color: rgba(255,255,255,.08); }
     .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .thumb .thumb-actions {
-      position: absolute; inset: auto .25rem .25rem .25rem; display: flex; gap: .25rem; justify-content: center;
-    }
-    .thumb .btn-thumb {
-      backdrop-filter: blur(4px);
-      border: 1px solid rgba(0,0,0,.2);
-    }
+    .thumb .thumb-actions { position: absolute; inset: auto .25rem .25rem .25rem; display: flex; gap: .25rem; justify-content: center; }
+    .thumb .btn-thumb { backdrop-filter: blur(4px); border: 1px solid rgba(0,0,0,.2); }
     [data-bs-theme="dark"] .thumb .btn-thumb { border-color: rgba(255,255,255,.2); }
     .add-image-btn { margin-left: auto; }
 
@@ -228,7 +213,8 @@
 
     const editForm = document.getElementById('editForm');
     const editInput = document.getElementById('editInput');
-    editModal = new bootstrap.Modal('#editModal');
+    // FIX: pasar elemento en vez de selector
+    editModal = new bootstrap.Modal(document.getElementById('editModal'));
 
     const imageModalEl = document.getElementById('imageModal');
     imageModal = new bootstrap.Modal(imageModalEl);
@@ -262,7 +248,6 @@
               arr = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.tasks) ? parsed.tasks : []);
             } catch { arr = []; }
             tasks = Array.isArray(arr) ? arr : [];
-            // asegurar propiedad images
             tasks.forEach(t => { if (!Array.isArray(t.images)) t.images = []; });
             normalizeOrders(true);
             save(); // guarda ya en v4
@@ -276,7 +261,6 @@
     }
 
     function normalizeOrders(isMigrating = false) {
-      // Asegura orderPending / orderCompleted coherentes
       const pend = tasks.filter(t => !t.completed);
       const comp = tasks.filter(t => t.completed);
       if (isMigrating || pend.some(t => typeof t.orderPending !== 'number')) {
@@ -311,11 +295,9 @@
       pendingEmpty.classList.toggle('d-none', pend.length !== 0);
       completedEmpty.classList.toggle('d-none', comp.length !== 0);
 
-      // activar DnD en ambas listas
       enableListDnD(pendingList, false);
       enableListDnD(completedList, true);
 
-      // actualizar icono de tema
       updateThemeIcon();
     }
 
@@ -328,13 +310,11 @@
       const row = document.createElement('div');
       row.className = 'd-flex align-items-center gap-2';
 
-      // Asidero de arrastre
       const dragBtn = document.createElement('button');
       dragBtn.className = 'btn btn-outline-secondary btn-sm btn-icon drag-handle';
       dragBtn.setAttribute('title', 'Arrastrar para reordenar');
       dragBtn.innerHTML = '<i class="bi bi-grip-vertical"></i>';
 
-      // Checkbox
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.className = 'form-check-input task-checkbox mt-0';
@@ -342,22 +322,20 @@
       cb.setAttribute('aria-label', task.completed ? 'Desmarcar tarea' : 'Marcar tarea');
       cb.addEventListener('change', () => toggleCompleted(task.id, cb.checked));
 
-      // Texto
       const text = document.createElement('span');
       text.className = 'task-text';
       text.textContent = task.text;
       if (task.completed) text.classList.add('completed');
 
-      // Acciones
       const actions = document.createElement('div');
       actions.className = 'ms-auto d-flex gap-1';
 
-      // Botón añadir imagen (disponible tanto en pendientes como completadas)
       const addImgBtn = document.createElement('button');
       addImgBtn.type = 'button';
       addImgBtn.className = 'btn btn-outline-secondary btn-sm btn-icon add-image-btn';
       addImgBtn.setAttribute('title', 'Añadir imagen');
       addImgBtn.innerHTML = '<i class="bi bi-image"></i>';
+
       const inputFile = document.createElement('input');
       inputFile.type = 'file';
       inputFile.accept = 'image/*';
@@ -402,14 +380,12 @@
       row.appendChild(actions);
       li.appendChild(row);
 
-      // Galería
       const gallery = document.createElement('div');
       gallery.className = 'task-gallery';
       const imgs = Array.isArray(task.images) ? task.images : [];
       imgs.forEach(img => gallery.appendChild(renderThumb(task.id, img)));
       li.appendChild(gallery);
 
-      // Eventos drag para el propio item
       li.addEventListener('dragstart', (e) => {
         li.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
@@ -529,12 +505,14 @@
         const text = (t && (t.text ?? t.title ?? '')).toString().trim();
         if (!text) return null;
         const completed = !!t.completed;
-        const images = Array.isArray(t.images) ? t.images.filter(it => it && typeof it.dataUrl === 'string').map(it => ({
-          id: typeof it.id === 'string' && it.id ? it.id : uid(),
-          name: (it.name || '').toString().slice(0,120),
-          dataUrl: it.dataUrl,
-          createdAt: typeof it.createdAt === 'number' ? it.createdAt : now
-        })) : [];
+        const images = Array.isArray(t.images) ? t.images
+          .filter(it => it && typeof it.dataUrl === 'string')
+          .map(it => ({
+            id: typeof it.id === 'string' && it.id ? it.id : uid(),
+            name: (it.name || '').toString().slice(0,120),
+            dataUrl: it.dataUrl,
+            createdAt: typeof it.createdAt === 'number' ? it.createdAt : now
+          })) : [];
         return {
           id: (t && typeof t.id === 'string' && t.id) ? t.id : uid(),
           text,
@@ -542,7 +520,8 @@
           createdAt: (t && typeof t.createdAt === 'number') ? t.createdAt : (now + idx),
           completedAt: completed ? ((t && typeof t.completedAt === 'number') ? t.completedAt : now + idx) : undefined,
           orderPending: typeof t.orderPending === 'number' ? t.orderPending : undefined,
-          orderCompleted: typeof t.orderCompleted === 'number'] === 'number' ? t.orderCompleted : undefined,
+          // FIX: quitar el corchete extra aquí
+          orderCompleted: typeof t.orderCompleted === 'number' ? t.orderCompleted : undefined,
           images
         };
       }).filter(Boolean);
@@ -579,7 +558,7 @@
 
     function openEdit(id) {
       const t = tasks.find(x => x.id === id);
-      if (!t || t.completed) return; // solo en pendientes
+      if (!t || t.completed) return;
       editId = id;
       editInput.value = t.text;
       setTimeout(() => { editInput.focus(); editInput.select(); }, 75);
@@ -603,24 +582,15 @@
       const t = tasks.find(x => x.id === taskId);
       if (!t) return;
       if (!Array.isArray(t.images)) t.images = [];
-      // Procesar cada archivo
       const procs = files.map(async (file) => {
         if (!file.type.startsWith('image/')) return null;
         const dataUrl = await fileToCompressedDataURL(file, 1280, 0.8);
-        return {
-          id: uid(),
-          name: file.name,
-          dataUrl,
-          createdAt: Date.now()
-        };
+        return { id: uid(), name: file.name, dataUrl, createdAt: Date.now() };
       });
       const results = await Promise.all(procs);
       let added = 0;
       results.forEach(img => { if (img) { t.images.push(img); added++; } });
-      if (added > 0) {
-        save();
-        render();
-      }
+      if (added > 0) { save(); render(); }
     }
 
     function removeImageFromTask(taskId, imageId) {
@@ -629,7 +599,6 @@
       t.images = t.images.filter(im => im.id !== imageId);
       save();
       render();
-      // si estaba abierto el modal de esa imagen, cerrarlo
       if (imageModalState.taskId === taskId && imageModalState.imageId === imageId) {
         imageModal.hide();
         imageModalState = { taskId: null, imageId: null };
@@ -664,11 +633,9 @@
           img.onload = () => {
             const { width, height } = scaleToFit(img.width, img.height, maxSize, maxSize);
             const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = width; canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            // convertimos a JPEG para reducir tamaño (conservar alpha en PNG si quieres: usa 'image/png')
             const dataUrl = canvas.toDataURL('image/jpeg', quality);
             resolve(dataUrl);
           };
@@ -678,7 +645,6 @@
         reader.readAsDataURL(file);
       });
     }
-
     function scaleToFit(w, h, maxW, maxH) {
       const ratio = Math.min(maxW / w, maxH / h, 1);
       return { width: Math.round(w * ratio), height: Math.round(h * ratio) };
@@ -691,80 +657,48 @@
         const afterEl = getDragAfterElement(listEl, e.clientY);
         showDropIndicator(listEl, afterEl);
       });
-
       listEl.addEventListener('dragleave', () => {
         listEl.classList.remove('drag-hover');
         clearDropIndicators();
       });
-
       listEl.addEventListener('drop', (e) => {
         e.preventDefault();
         const draggedId = e.dataTransfer.getData('text/plain');
         const dragged = listEl.querySelector('[data-id="'+draggedId+'"]') || document.querySelector('[data-id="'+draggedId+'"]');
-
-        // Solo reordenar dentro de la misma lista
-        if (!dragged || dragged.parentElement !== listEl) {
-          clearDropIndicators();
-          return;
-        }
-
+        if (!dragged || dragged.parentElement !== listEl) { clearDropIndicators(); return; }
         const afterEl = getDragAfterElement(listEl, e.clientY);
-        if (afterEl == null) {
-          listEl.appendChild(dragged);
-        } else {
-          listEl.insertBefore(dragged, afterEl);
-        }
-
+        if (afterEl == null) listEl.appendChild(dragged); else listEl.insertBefore(dragged, afterEl);
         listEl.classList.remove('drag-hover');
         clearDropIndicators();
         persistListOrder(listEl, isCompletedList);
       });
-
-      listEl.addEventListener('dragenter', (e) => {
-        e.preventDefault();
-        listEl.classList.add('drag-hover');
-      });
+      listEl.addEventListener('dragenter', (e) => { e.preventDefault(); listEl.classList.add('drag-hover'); });
     }
-
     function getDragAfterElement(container, y) {
       const draggableElements = [...container.querySelectorAll('li.list-group-item:not(.dragging)')];
       return draggableElements.reduce((closest, child) => {
         const box = child.getBoundingClientRect();
         const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        } else {
-          return closest;
-        }
+        if (offset < 0 && offset > closest.offset) { return { offset: offset, element: child }; }
+        else { return closest; }
       }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
-
     function showDropIndicator(listEl, afterEl) {
       clearDropIndicators();
       const indicator = document.createElement('div');
       indicator.className = 'drop-indicator';
-      if (!afterEl) {
-        listEl.appendChild(indicator);
-      } else {
-        listEl.insertBefore(indicator, afterEl);
-      }
+      if (!afterEl) listEl.appendChild(indicator); else listEl.insertBefore(indicator, afterEl);
     }
-
-    function clearDropIndicators() {
-      document.querySelectorAll('.drop-indicator').forEach(d => d.remove());
-    }
-
+    function clearDropIndicators() { document.querySelectorAll('.drop-indicator').forEach(d => d.remove()); }
     function persistListOrder(listEl, isCompletedList) {
       const ids = [...listEl.querySelectorAll('li.list-group-item')].map(li => li.dataset.id);
       ids.forEach((id, idx) => {
         const t = tasks.find(x => x.id === id);
         if (!t) return;
-        if (isCompletedList) t.orderCompleted = idx;
-        else t.orderPending = idx;
+        if (isCompletedList) t.orderCompleted = idx; else t.orderPending = idx;
       });
       save();
     }
-
     function getNextOrderIndex(isCompletedList) {
       const arr = tasks.filter(t => !!t.completed === !!isCompletedList);
       if (arr.length === 0) return 0;
@@ -779,7 +713,6 @@
       themeIcon.className = theme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
       themeToggleBtn.setAttribute('aria-label', theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
     }
-
     function toggleTheme() {
       const current = document.documentElement.getAttribute('data-bs-theme') || 'dark';
       const next = current === 'dark' ? 'light' : 'dark';
@@ -787,7 +720,6 @@
       try { localStorage.setItem('todo_theme', next); } catch(e) {}
       updateThemeIcon();
     }
-
     themeToggleBtn.addEventListener('click', toggleTheme);
 
     // Eventos
@@ -797,11 +729,7 @@
       newTaskInput.value = '';
       newTaskInput.focus();
     });
-
-    editForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      applyEdit();
-    });
+    editForm.addEventListener('submit', (e) => { e.preventDefault(); applyEdit(); });
 
     // Importar/Exportar
     importTxtBtn.addEventListener('click', () => txtFileInput.click());
@@ -819,7 +747,6 @@
         e.target.value = '';
       }
     });
-
     exportJsonBtn.addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(getSnapshot(), null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
